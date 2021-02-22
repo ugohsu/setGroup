@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <?!= HtmlService.createHtmlOutputFromFile('css').getContent(); ?>
+  </head>
+  <body>
+    <h1>グループ編成</h1>
+    <h2>オプションの指定</h2>
+    <h3>スプレッドシートの URL 入力欄</h3>
+    <input id="URL">
+    <button onclick="buttonGetURL()">送信</button><br>
+    <div id="sheetNamesArea"></div>
+
+    <h3>データ読み込み対象シートの選択欄</h3>
+    <select id="trgSheets">
+    </select>
+    <button onclick="buttonSelectSheet()">選択</button><br>
+    <div id="inputArea"></div>
+
+    <h3>ID の選択</h3>
+    <p>
+      選択された ID 列を対象にグループ編成します。ID が重複している場合は最新の入力 (より行番号が大きい入力) が参照されます。
+    </p>
+    <select id="IDCol">
+    </select>
+    <button onclick="buttonSelectID()">選択</button>
+    <div id="IDArea"></div>
+
+    <h3>偏りをなるべく小さくする要素</h3>
+    <div id="minvar"></div>
+
+    <h3>偏りをなるべく大きくする要素 (希望テーマなど)</h3>
+    <div id="maxvar"></div><br>
+
+    <div id="calc"></div>
+
+    <h2>読み込みデータ</h2>
+    <div id="dataArea"></div>
+
+    <div id="final"></div>
+
+    <h2>要素の分散の散布図</h2>
+    <canvas id="scatter"></canvas>
+
+    <?!= HtmlService.createHtmlOutputFromFile('js').getContent(); ?>
+  </body>
+</html>

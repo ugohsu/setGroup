@@ -1,0 +1,441 @@
+<script src="https://cdn.jsdelivr.net/npm/chart.js@2.9.4/dist/Chart.min.js"></script>
+<script>
+
+  let URL, sheetNames, dataSheet, arrayData;
+
+  /*
+  Chart 系
+  */
+
+  let ctx = document.getElementById("scatter").getContext("2d");
+
+  /*
+  URL の入力関係
+  */
+
+  function buttonGetURL() {
+    URL = document.getElementById("URL").value;
+    google.script.run
+      .withSuccessHandler(saveSheetNames)
+      .replSheetNames(URL);
+  }
+
+  // sheetNames を格納する関数
+  function saveSheetNames(reply) {
+    sheetNames = reply;
+
+    // 読み込み完了のメッセージ
+    document.getElementById("sheetNamesArea").innerHTML = "読み込み完了";
+
+    // 選択肢を作成する
+    mkSelect("trgSheets", sheetNames);
+  }
+
+  /*
+  シートの選択
+  */
+
+  function buttonSelectSheet() {
+    dataSheet = document.getElementById("trgSheets").value;
+    google.script.run
+      .withSuccessHandler(saveData)
+      .inputData(URL, dataSheet);
+  }
+
+  function saveData(data) {
+    arrayData = convertArray(data);
+
+    // 選択肢を作成する
+    mkSelect("IDCol", arrayData.names);
+
+    // 読み込み完了のメッセージ
+    document.getElementById("inputArea").innerHTML = "読み込み完了";
+    document.getElementById("IDArea").innerHTML = "";
+    document.getElementById("dataArea").innerHTML = mkTableString(arrayData);
+
+    // minvar と maxvar のチェックボックス作成
+    document.getElementById("minvar").innerHTML = "";
+    document.getElementById("maxvar").innerHTML = "";
+
+    // 実行ボタンの初期化
+    document.getElementById("calc").innerHTML = "";
+
+    // 送信エリアの初期化
+    document.getElementById("final").innerHTML = "";
+  }
+
+  /*
+  ID の選択
+  */
+
+  function buttonSelectID() {
+    // ID の列名を取得
+    let trg = document.getElementById("IDCol").value;
+
+    // ID 名を参照して Dict データを uniq する
+    uniqDimensionalArray(trg);
+    
+    // 反映完了のメッセージ
+    document.getElementById("IDArea").innerHTML = document.getElementById("IDArea").innerHTML + trg + "を参照<br>";
+    document.getElementById("dataArea").innerHTML = mkTableString(arrayData);
+
+    // minvar と maxvar のチェックボックス作成
+    document.getElementById("minvar").innerHTML = mkCheckbox("formminvar", "chkminvar", trg);
+    document.getElementById("maxvar").innerHTML = mkCheckbox("formmaxvar", "chkmaxvar", trg);
+
+    // 実行ボタンの作成
+    document.getElementById("calc").innerHTML = '<h2>グループ編成の実行</h2><input type="number" id="times" value="10000">回試行; <input type="number" id="ngroup" value = 1>グループ: <input type="button" value="実行" onclick="buttonCalc()">';
+  }
+
+  function uniqDimensionalArray(trg) {
+    let orgArray = arrayData.body.map(x => x[arrayData.index[trg]]);
+    let trgArray = uniq(orgArray);
+    let rslt = [];
+    trgArray.forEach(
+      function (elem) {
+        rslt.push(arrayData.body[orgArray.lastIndexOf(elem)].slice());
+      }
+    )
+    arrayData.body = rslt;
+  }
+
+  /*
+  グループ編成を実行
+  */
+  
+  function buttonCalc() {
+    let times = Number(document.getElementById("times").value);
+    let ngroup = Number(document.getElementById("ngroup").value);
+    let minvararray = [];
+    let maxvararray = [];
+    let minvarrslt = document.formminvar.chkminvar;
+    let maxvarrslt = document.formmaxvar.chkmaxvar;
+    let group = genGroupNum(arrayData.body.length, ngroup);
+    let bestGroup = {"factor": [], "body": []};
+    let groupLog = [];
+
+    // 偏りをなるべく小さく or 大きくする対象の取得
+    if (arrayData.names.length > 1) {
+      for (let i = 0; i < minvarrslt.length; i++) {
+        if (minvarrslt[i].checked) {
+          minvararray.push(minvarrslt[i].value);
+        }
+
+        if (maxvarrslt[i].checked) {
+          maxvararray.push(maxvarrslt[i].value);
+        }
+      }
+    }
+
+    // シャッフル
+    for (let i = 0; i < times; i++) {
+      applyShuffle(minvararray, maxvararray, group, bestGroup, groupLog);
+    }
+
+    // 結合と整理
+    let groupTmp = chgName(arrayData, "group");
+    appendCol(arrayData, bestGroup.body, groupTmp);
+    mySort(arrayData.body, arrayData.index[groupTmp]);
+
+    // 反映完了のメッセージ
+    document.getElementById("dataArea").innerHTML = mkTableString(arrayData);
+
+    console.log([{x: bestGroup.factor[0], y: bestGroup.factor[1]}]);
+
+    // Chart
+    let scatterChart = new Chart(ctx, {
+      type: "scatter",
+      data: {
+        datasets: [{
+          label: "All Trial",
+          data: groupLog,
+          // マーカー 背景色
+          backgroundColor: 'rgba(0, 159, 255, 0.45)',
+          // マーカー 枠線の色
+          borderColor: 'rgba(0, 159, 255, 0.5)'
+        }, {
+          label: "Optimal",
+          data: [{x: bestGroup.factor[0], y: bestGroup.factor[1]}],
+          backgroundColor: 'rgba(255, 48, 32, 0.45)',
+          borderColor: 'rgba(255, 48, 32, 0.5)',
+          pointRadius: 5
+        }]
+      },
+      options: {
+        scales: {
+          xAxes: [{
+            scaleLabel: {
+              display: true,
+              labelString: "偏りをなるべく小さくしたい要素の分散"
+            }
+          }],
+          yAxes: [{
+            scaleLabel: {
+              display: true,
+              labelString: "偏りをなるべく大きくしたい要素の分散"
+            }
+          }]
+        }
+      }
+    });
+
+    // 送信
+    document.getElementById("final").innerHTML = "" +
+      '<h3>結果の送信</h3>' +
+      '<p>生成したグループ編成をスプレッドシートの新しいシートに送信します。</p>' +
+      '<button onclick="buttonSend()">送信</button><br>' +
+      '<div id="reportArea"></div>';
+    
+  }
+
+  // シャッフルを適用し、各種 vararray の分散を用いて評価をおこなう
+  function applyShuffle(minvararray, maxvararray, group, bestGroup, groupLog) {
+    // シャッフルの実行
+    let shuffledGroup = myShuffle(group);
+
+    // minvar 要素の計算
+    let minvarbox = 0;
+    minvararray.forEach(
+      function (item) {
+        minvarbox = minvarbox + calcSumVar(item, arrayData, shuffledGroup);
+      }
+    )
+
+    // maxvar 要素の計算
+    let maxvarbox = 0;
+    maxvararray.forEach(
+      function (item) {
+        maxvarbox = maxvarbox + calcSumVar(item, arrayData, shuffledGroup);
+      }
+    )
+
+    // log への格納
+    groupLog.push({x: minvarbox, y: maxvarbox});
+
+    // bestGroup への格納
+    if (
+      !bestGroup.factor.length ||
+      ((minvarbox <= bestGroup.factor[0]) &&
+      (maxvarbox >= bestGroup.factor[1]))
+    ) {
+      bestGroup.factor = [minvarbox, maxvarbox];
+      bestGroup.body = shuffledGroup.slice();
+    }
+  }
+
+  // var 要素の分散の合計
+  function calcSumVar(colname, data, shuffled) {
+    // 計算結果格納場所
+    let rslt = 0;
+
+    // colname に含まれる要素の set
+    let items = uniq(data.body.map(x => x[data.index[colname]]));
+
+    // 各要素ごとに出現分布を計算
+    items.forEach(
+      function (item) {
+        let freq = calcFreq(item, colname, data, shuffled);
+        rslt += variance(freq);
+      }
+    )
+    
+    return rslt;
+  }
+
+  // item が各 Group に何回出現するか数える
+  function calcFreq(item, colname, data, shuffled) {
+    // 長さが Group の長さと同じですべての要素がゼロの配列を用意
+    let rslt = Array(uniq(shuffled).length);
+    rslt.fill(0);
+
+    // shuffled でループし、data.index[colname] = item となるときに
+    // group がどこに割り当てられているのかを調査
+    for (let i = 0; i < shuffled.length; i++) {
+      if (data.body[i][data.index[colname]] == item) {
+        rslt[shuffled[i] - 1]++;
+      }
+    }
+
+    return rslt;
+  }
+
+  // 結果をスプレッドシートに送信する
+  function buttonSend() {
+    google.script.run
+      .withSuccessHandler(report)
+      .writeSpreadSheet(URL, arrayData);
+  }
+
+  function report(string) {
+    document.getElementById("reportArea").innerHTML = string;
+  }
+
+  /*
+  その他の内部関数
+  */
+
+  // 配列の平均値
+  function mean(data) {
+    let sum = data.reduce((sum, elem) => sum + elem, 0);
+    return (sum / data.length);
+  }
+
+  // 配列の分散
+  function variance(data) {
+    let average = mean(data);
+    let square = 0;
+    for (let i = 0; i < data.length; i++) {
+      square = square + Math.pow(data[i] - average, 2);
+    }
+    return (square / data.length);
+  }
+
+  // checkbox を作成
+  function mkCheckbox (formName, chkName, exclude) {
+    let formText = '<form name="' + formName + '">';
+    arrayData.names.forEach(
+      function (item) {
+        if (item != exclude) {
+          formText = formText +
+            '<input type="checkbox" name="' +
+            chkName + '" value="' +
+            item + '">' + item + '<br>';
+        }
+      }
+    );
+
+    return formText;
+  }
+
+  // グループ番号の生成
+  function genGroupNum(length, numGroup) {
+    let rslt = [];
+    let n = 1;
+    for (let i = 0; i < length; i++) {
+      rslt.push(n);
+      n++;
+      if (n > numGroup) n = 1;
+    }
+    return rslt;
+  }
+  
+  // 配列をシャッフルする関数
+  const myShuffle = ([...array]) => {
+    for (let i = array.length - 1; i >= 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+  }
+
+  // 1 次元配列を arrayDict に追加
+  function appendCol(dict, array, name) {
+    dict.index[name] = dict.names.length;
+    dict.names.push(name);
+    for (let i = 0; i < dict.body.length; i++) {
+      dict.body[i].push(array[i]);
+    }
+  }
+
+  // name が重複している場合に末尾に再帰的に .x を付ける
+  function chgName(dict, name) {
+    if (dict.names.indexOf(name) != -1) {
+      name = name + ".x";
+      return chgName(dict, name);
+    } else {
+      return name;
+    }
+  }
+
+  // 2 次元配列を {"index": [index の連想配列], "names": [index], "body": [データの 2 次元配列]} に変換
+  function convertArray (array) {
+      let index = {};
+      let body = array.slice(1);
+      
+      for (let i = 0; i < array[0].length; i++) {
+          index[array[0][i]] = i;
+      }
+      
+      return {"index": index, "names": array[0], "body": body};
+  }
+
+  // select の選択肢を完成させる関数
+  function mkSelect(id, array) {
+    let select = document.getElementById(id);
+    
+    // 初期化
+    if (select.hasChildNodes()) {
+      while (select.childNodes.length > 0) {
+        select.removeChild(select.firstChild);
+      }
+    }
+
+    // 追加
+    array.forEach(
+      function(sheet) {
+        let option = document.createElement("option");
+        option.value = sheet;
+        option.innerHTML = sheet;
+        select.appendChild(option);
+      }
+    )
+  }
+
+
+  // table の表示
+  function mkTableString(arrayDict) {
+    let tableString = "<table>";
+
+    // header
+    tableString = tableString + "<tr>";
+    arrayDict.names.forEach(
+      function (item) {
+        tableString = tableString + "<th>" +
+          item + "</th>";
+      }
+    )
+    tableString = tableString + "</tr>";
+
+    // body
+    arrayDict.body.forEach(
+      function (row) {
+        tableString = tableString + "<tr>";
+          row.forEach(
+            function (item) {
+              tableString = tableString + "<td>" +
+                item + "</td>";
+            }
+          )
+        tableString = tableString + "</tr>";
+      }
+    )
+
+    tableString = tableString + "</table>";
+
+    return tableString;
+  }
+
+  // 2次元配列を並び替えする
+  function mySort (array, n) {
+    array.sort(
+      function (a, b) {
+        if (a[n] < b[n]) return -1;
+        if (a[n] > b[n]) return 1;
+        // 複数キーの場合、上 2 行と同様のコードをそのまま書けば良い
+        // 降順の場合は不等号を逆にする
+        return 0;
+      }
+    )
+  }
+
+  // 配列の重複を取り除く
+  function uniq(array) {
+      const uniquedArray = [];
+      for (const elem of array) {
+          if (uniquedArray.indexOf(elem) < 0)
+              uniquedArray.push(elem);
+      }
+      return uniquedArray;
+  }
+
+</script>

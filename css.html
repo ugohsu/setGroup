@@ -1,0 +1,80 @@
+<style>
+  h1 {
+    position: relative;
+    padding: 0.6em;
+    background: -webkit-repeating-linear-gradient(-45deg, #fff5df, #fff5df 4px,#ffe4b1 3px, #ffe4b1 8px);
+    background: repeating-linear-gradient(-45deg, #fff5df, #fff5df 4px,#ffe4b1 3px, #ffe4b1 8px);
+    border-radius: 7px;
+  }
+  
+  h1:after {
+    position: absolute;
+    content: '';
+    top: 100%;
+    left: 30px;
+    border: 15px solid transparent;
+    border-top: 15px solid #ffebbe;
+    width: 0;
+    height: 0;
+  }
+  
+  h2{
+    border-bottom: double 5px #FFC778;
+  }
+  
+  h3{
+    padding: 0.5em;/*文字周りの余白*/
+    color: #494949;/*文字色*/
+    background: #fffaf4;/*背景色*/
+    border-left: solid 5px #ffaf58;/*左線（実線 太さ 色）*/
+  }
+  
+  h4 {
+    position: relative;
+    padding: 0.25em 0;
+  }
+  h4:after {
+    content: "";
+    display: block;
+    height: 4px;
+    background: -webkit-linear-gradient(to right, rgb(255, 186, 115), #ffb2b2);
+    background: linear-gradient(to right, rgb(255, 186, 115), #ffb2b2);
+  }
+  
+  table{
+    border-collapse: collapse;
+  }
+  
+  .topBottomLine{
+    border-top: 2px solid black;
+    border-bottom: 1px solid black;
+  }
+  
+  .bottomTopLine{
+    border-top: 1px solid black;
+    border-bottom: 2px solid black;
+  }
+  
+  .leftLine{
+    border-left: 1px solid black;
+  }
+  
+  .alignLeftLine{
+    border-left: 1px solid black;
+    text-align: left;
+    vertical-align: middle;
+    width: 140px;
+  }
+  
+  .alignLeft{
+    text-align: left;
+    vertical-align: middle;
+    width: 140px;
+  }
+  
+  .alignRight{
+    text-align: right;
+    vertical-align: middle;
+    width: 100px;
+  }
+</style>
